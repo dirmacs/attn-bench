@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "AttnBench",
     platforms: [
-        .macOS(.v13)
+        .macOS("13.3")
     ],
     dependencies: [
         // MLX Swift dependency snippet is documented in the mlx-swift README. [web:31]
