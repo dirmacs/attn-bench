@@ -1,32 +1,27 @@
-import Testing
+import XCTest
 import MLX
 import MLXRandom
 
 @testable import AttnBenchLib
 
-@Suite("Linear Layer Tests")
-struct LinearTests {
-    @Test("Linear layer produces correct output shape")
+final class LinearTests: XCTestCase {
     func testLinearShape() {
         let linear = Linear(64, 128, seed: 42)
         let x = MLXRandom.normal([2, 10, 64], key: MLXRandom.key(1))
         let y = linear(x)
 
-        #expect(y.shape == [2, 10, 128])
+        XCTAssertEqual(y.shape, [2, 10, 128])
     }
 
-    @Test("Linear layer weights have correct shape")
     func testLinearWeights() {
         let linear = Linear(32, 64, seed: 42)
 
-        #expect(linear.w.shape == [32, 64])
-        #expect(linear.b.shape == [64])
+        XCTAssertEqual(linear.w.shape, [32, 64])
+        XCTAssertEqual(linear.b.shape, [64])
     }
 }
 
-@Suite("Attention Output Shape Tests")
-struct AttentionShapeTests {
-    @Test("MHA produces correct output shape")
+final class AttentionShapeTests: XCTestCase {
     func testMHAShape() {
         let b = 2
         let n = 16
@@ -40,10 +35,9 @@ struct AttentionShapeTests {
         let y = mha.forward(x: x)
         eval(y)
 
-        #expect(y.shape == [b, n, dModel])
+        XCTAssertEqual(y.shape, [b, n, dModel])
     }
 
-    @Test("GQA produces correct output shape")
     func testGQAShape() {
         let b = 2
         let n = 16
@@ -58,10 +52,9 @@ struct AttentionShapeTests {
         let y = gqa.forward(x: x)
         eval(y)
 
-        #expect(y.shape == [b, n, dModel])
+        XCTAssertEqual(y.shape, [b, n, dModel])
     }
 
-    @Test("MQA produces correct output shape")
     func testMQAShape() {
         let b = 2
         let n = 16
@@ -75,13 +68,11 @@ struct AttentionShapeTests {
         let y = mqa.forward(x: x)
         eval(y)
 
-        #expect(y.shape == [b, n, dModel])
+        XCTAssertEqual(y.shape, [b, n, dModel])
     }
 }
 
-@Suite("SDPA Tests")
-struct SDPATests {
-    @Test("SDPA produces correct output shape")
+final class SDPATests: XCTestCase {
     func testSDPAShape() {
         let b = 2
         let h = 4
@@ -96,10 +87,9 @@ struct SDPATests {
         let out = sdpa(q: q, k: k, v: v, dh: dh)
         eval(out)
 
-        #expect(out.shape == [b, h, n, dh])
+        XCTAssertEqual(out.shape, [b, h, n, dh])
     }
 
-    @Test("SDPA output values are finite")
     func testSDPAFinite() {
         let q = MLXRandom.normal([1, 2, 8, 16], key: MLXRandom.key(1))
         let k = MLXRandom.normal([1, 2, 8, 16], key: MLXRandom.key(2))
@@ -110,34 +100,28 @@ struct SDPATests {
         eval(out)
 
         let hasNaN = any(isNaN(out)).item(Bool.self)
-        #expect(hasNaN == false)
+        XCTAssertFalse(hasNaN)
     }
 }
 
-@Suite("Attention Name Tests")
-struct AttentionNameTests {
-    @Test("MHA has correct name")
+final class AttentionNameTests: XCTestCase {
     func testMHAName() {
         let mha = MHA(b: 1, n: 8, dModel: 32, heads: 4, seed: 42)
-        #expect(mha.name == "MHA")
+        XCTAssertEqual(mha.name, "MHA")
     }
 
-    @Test("GQA has correct name")
     func testGQAName() {
         let gqa = GQA(b: 1, n: 8, dModel: 32, heads: 4, kvHeads: 2, seed: 42)
-        #expect(gqa.name == "GQA")
+        XCTAssertEqual(gqa.name, "GQA")
     }
 
-    @Test("MQA has correct name")
     func testMQAName() {
         let mqa = MQA(b: 1, n: 8, dModel: 32, heads: 4, seed: 42)
-        #expect(mqa.name == "MQA")
+        XCTAssertEqual(mqa.name, "MQA")
     }
 }
 
-@Suite("BenchRow Tests")
-struct BenchRowTests {
-    @Test("BenchRow stores values correctly")
+final class BenchRowTests: XCTestCase {
     func testBenchRowValues() {
         let row = BenchRow(
             name: "TestAttn",
@@ -150,13 +134,13 @@ struct BenchRowTests {
             msPerIter: 1.5
         )
 
-        #expect(row.name == "TestAttn")
-        #expect(row.b == 4)
-        #expect(row.n == 128)
-        #expect(row.dModel == 512)
-        #expect(row.heads == 8)
-        #expect(row.kvHeads == 2)
-        #expect(row.iters == 100)
-        #expect(row.msPerIter == 1.5)
+        XCTAssertEqual(row.name, "TestAttn")
+        XCTAssertEqual(row.b, 4)
+        XCTAssertEqual(row.n, 128)
+        XCTAssertEqual(row.dModel, 512)
+        XCTAssertEqual(row.heads, 8)
+        XCTAssertEqual(row.kvHeads, 2)
+        XCTAssertEqual(row.iters, 100)
+        XCTAssertEqual(row.msPerIter, 1.5)
     }
 }

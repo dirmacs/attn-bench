@@ -19,7 +19,7 @@ public func forceEval(_ arrays: [MLXArray]) {
 // MARK: - Benchmark Data
 
 /// A row of benchmark results.
-public struct BenchRow: Sendable {
+public struct BenchRow {
     public let name: String
     public let b: Int
     public let n: Int
@@ -52,7 +52,7 @@ public func printCSV(_ rows: [BenchRow]) {
 // MARK: - Linear Layer
 
 /// A simple linear (fully-connected) layer.
-public struct Linear: Sendable {
+public struct Linear {
     public let w: MLXArray
     public let b: MLXArray
 
@@ -74,7 +74,7 @@ public struct Linear: Sendable {
 // MARK: - Attention Protocol
 
 /// Protocol for attention blocks.
-public protocol AttentionBlock: Sendable {
+public protocol AttentionBlock {
     var name: String { get }
     func forward(x: MLXArray) -> MLXArray
 }

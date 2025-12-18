@@ -35,16 +35,5 @@ add_executable(AttnBench
 target_link_libraries(AttnBench PRIVATE AttnBenchLib)
 target_compile_options(AttnBench PRIVATE -parse-as-library)
 
-# Tests
-enable_testing()
-
-file(GLOB TEST_SOURCES ${CMAKE_CURRENT_LIST_DIR}/Tests/AttnBenchTests/*.swift)
-add_executable(AttnBenchTests ${TEST_SOURCES})
-target_link_libraries(AttnBenchTests PRIVATE
-  AttnBenchLib
-  MLX
-  MLXRandom
-)
-target_compile_options(AttnBenchTests PRIVATE -parse-as-library)
-
-add_test(NAME AttnBenchTests COMMAND AttnBenchTests)
+# Note: Tests are run via xcodebuild or SwiftPM, not CMake
+# Use: xcodebuild test -scheme AttnBench -destination 'platform=OS X'

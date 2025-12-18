@@ -74,23 +74,27 @@ MHA,1,256,1024,16,16,50,1.8218
 
 ## Running Tests
 
+Tests are run via `xcodebuild` (not CMake):
+
 ```bash
-cd build
-ctest --output-on-failure
+xcodebuild test -scheme AttnBench-Package -destination 'platform=OS X'
 ```
 
 ## Project Structure
 
 ```
 attn-bench/
-├── CMakeLists.txt          # CMake build configuration
-├── Package.swift           # Swift Package Manager manifest
+├── CMakeLists.txt              # CMake build configuration
+├── Package.swift               # Swift Package Manager manifest
+├── LICENSE                     # MIT License
 ├── Sources/
-│   └── AttnBench/
-│       └── AttnBench.swift # Main benchmark implementation
+│   ├── AttnBench/
+│   │   └── AttnBench.swift     # Main executable entry point
+│   └── AttnBenchLib/
+│       └── Attention.swift     # Core attention implementations
 └── Tests/
     └── AttnBenchTests/
-        └── AttnBenchTests.swift
+        └── AttnBenchTests.swift # Unit tests
 ```
 
 ## Configuration
