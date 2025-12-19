@@ -144,3 +144,284 @@ final class BenchRowTests: XCTestCase {
         XCTAssertEqual(row.msPerIter, 1.5)
     }
 }
+
+// MARK: - Sliding Window Attention Tests
+
+final class SlidingWindowAttentionTests: XCTestCase {
+    func testSWAShape() {
+        let b = 2
+        let n = 32
+        let dModel = 64
+        let heads = 4
+        let windowSize = 8
+
+        let swa = SlidingWindowAttention(b: b, n: n, dModel: dModel, heads: heads, windowSize: windowSize, seed: 42)
+        let x = MLXRandom.normal([b, n, dModel], key: MLXRandom.key(1))
+        eval(x)
+
+        let y = swa.forward(x: x)
+        eval(y)
+
+        XCTAssertEqual(y.shape, [b, n, dModel])
+    }
+
+    func testSWAName() {
+        let swa = SlidingWindowAttention(b: 1, n: 16, dModel: 32, heads: 4, windowSize: 4, seed: 42)
+        XCTAssertEqual(swa.name, "SWA(w=4)")
+    }
+
+    func testSWAFinite() {
+        let b = 1
+        let n = 16
+        let dModel = 32
+        let heads = 2
+        let windowSize = 4
+
+        let swa = SlidingWindowAttention(b: b, n: n, dModel: dModel, heads: heads, windowSize: windowSize, seed: 42)
+        let x = MLXRandom.normal([b, n, dModel], key: MLXRandom.key(1))
+        eval(x)
+
+        let y = swa.forward(x: x)
+        eval(y)
+
+        let hasNaN = any(isNaN(y)).item(Bool.self)
+        XCTAssertFalse(hasNaN)
+    }
+
+    func testSWAWindowCapping() {
+        // Window size larger than sequence should be capped
+        let b = 1
+        let n = 8
+        let dModel = 32
+        let heads = 2
+        let windowSize = 16  // Larger than n
+
+        let swa = SlidingWindowAttention(b: b, n: n, dModel: dModel, heads: heads, windowSize: windowSize, seed: 42)
+        XCTAssertEqual(swa.windowSize, n)  // Should be capped to n
+    }
+}
+
+// MARK: - Block-Sparse Attention Tests
+
+final class BlockSparseAttentionTests: XCTestCase {
+    func testBlockSparseShape() {
+        let b = 2
+        let n = 32
+        let dModel = 64
+        let heads = 4
+        let blockSize = 8
+
+        let blockSparse = BlockSparseAttention(b: b, n: n, dModel: dModel, heads: heads, blockSize: blockSize, globalTokens: 1, seed: 42)
+        let x = MLXRandom.normal([b, n, dModel], key: MLXRandom.key(1))
+        eval(x)
+
+        let y = blockSparse.forward(x: x)
+        eval(y)
+
+        XCTAssertEqual(y.shape, [b, n, dModel])
+    }
+
+    func testBlockSparseName() {
+        let blockSparse = BlockSparseAttention(b: 1, n: 16, dModel: 32, heads: 4, blockSize: 4, globalTokens: 2, seed: 42)
+        XCTAssertEqual(blockSparse.name, "BlockSparse(bs=4,g=2)")
+    }
+
+    func testBlockSparseFinite() {
+        let b = 1
+        let n = 16
+        let dModel = 32
+        let heads = 2
+        let blockSize = 4
+
+        let blockSparse = BlockSparseAttention(b: b, n: n, dModel: dModel, heads: heads, blockSize: blockSize, globalTokens: 1, seed: 42)
+        let x = MLXRandom.normal([b, n, dModel], key: MLXRandom.key(1))
+        eval(x)
+
+        let y = blockSparse.forward(x: x)
+        eval(y)
+
+        let hasNaN = any(isNaN(y)).item(Bool.self)
+        XCTAssertFalse(hasNaN)
+    }
+
+    func testBlockSparseNoGlobal() {
+        // Test without global tokens
+        let b = 1
+        let n = 16
+        let dModel = 32
+        let heads = 2
+        let blockSize = 4
+
+        let blockSparse = BlockSparseAttention(b: b, n: n, dModel: dModel, heads: heads, blockSize: blockSize, globalTokens: 0, seed: 42)
+        let x = MLXRandom.normal([b, n, dModel], key: MLXRandom.key(1))
+        eval(x)
+
+        let y = blockSparse.forward(x: x)
+        eval(y)
+
+        XCTAssertEqual(y.shape, [b, n, dModel])
+    }
+}
+
+// MARK: - Linear Attention Tests
+
+final class LinearAttentionTests: XCTestCase {
+    func testLinearAttnShape() {
+        let b = 2
+        let n = 16
+        let dModel = 64
+        let heads = 4
+
+        let linearAttn = LinearAttention(b: b, n: n, dModel: dModel, heads: heads, seed: 42)
+        let x = MLXRandom.normal([b, n, dModel], key: MLXRandom.key(1))
+        eval(x)
+
+        let y = linearAttn.forward(x: x)
+        eval(y)
+
+        XCTAssertEqual(y.shape, [b, n, dModel])
+    }
+
+    func testLinearAttnName() {
+        let linearAttn = LinearAttention(b: 1, n: 8, dModel: 32, heads: 4, seed: 42)
+        XCTAssertEqual(linearAttn.name, "LinearAttn")
+    }
+
+    func testLinearAttnFinite() {
+        let b = 1
+        let n = 16
+        let dModel = 32
+        let heads = 2
+
+        let linearAttn = LinearAttention(b: b, n: n, dModel: dModel, heads: heads, seed: 42)
+        let x = MLXRandom.normal([b, n, dModel], key: MLXRandom.key(1))
+        eval(x)
+
+        let y = linearAttn.forward(x: x)
+        eval(y)
+
+        let hasNaN = any(isNaN(y)).item(Bool.self)
+        XCTAssertFalse(hasNaN)
+    }
+}
+
+// MARK: - Causal Linear Attention Tests
+
+final class CausalLinearAttentionTests: XCTestCase {
+    func testCausalLinearAttnShape() {
+        let b = 2
+        let n = 16
+        let dModel = 64
+        let heads = 4
+
+        let causalLinear = CausalLinearAttention(b: b, n: n, dModel: dModel, heads: heads, seed: 42)
+        let x = MLXRandom.normal([b, n, dModel], key: MLXRandom.key(1))
+        eval(x)
+
+        let y = causalLinear.forward(x: x)
+        eval(y)
+
+        XCTAssertEqual(y.shape, [b, n, dModel])
+    }
+
+    func testCausalLinearAttnName() {
+        let causalLinear = CausalLinearAttention(b: 1, n: 8, dModel: 32, heads: 4, seed: 42)
+        XCTAssertEqual(causalLinear.name, "CausalLinearAttn")
+    }
+
+    func testCausalLinearAttnFinite() {
+        let b = 1
+        let n = 16
+        let dModel = 32
+        let heads = 2
+
+        let causalLinear = CausalLinearAttention(b: b, n: n, dModel: dModel, heads: heads, seed: 42)
+        let x = MLXRandom.normal([b, n, dModel], key: MLXRandom.key(1))
+        eval(x)
+
+        let y = causalLinear.forward(x: x)
+        eval(y)
+
+        let hasNaN = any(isNaN(y)).item(Bool.self)
+        XCTAssertFalse(hasNaN)
+    }
+}
+
+// MARK: - Sliding Window SDPA Tests
+
+final class SlidingWindowSDPATests: XCTestCase {
+    func testSlidingWindowSDPAShape() {
+        let b = 2
+        let h = 4
+        let n = 16
+        let dh = 32
+        let windowSize = 4
+
+        let q = MLXRandom.normal([b, h, n, dh], key: MLXRandom.key(1))
+        let k = MLXRandom.normal([b, h, n, dh], key: MLXRandom.key(2))
+        let v = MLXRandom.normal([b, h, n, dh], key: MLXRandom.key(3))
+        eval([q, k, v])
+
+        let out = slidingWindowSDPA(q: q, k: k, v: v, windowSize: windowSize, dh: dh)
+        eval(out)
+
+        XCTAssertEqual(out.shape, [b, h, n, dh])
+    }
+
+    func testSlidingWindowSDPAFinite() {
+        let b = 1
+        let h = 2
+        let n = 8
+        let dh = 16
+        let windowSize = 4
+
+        let q = MLXRandom.normal([b, h, n, dh], key: MLXRandom.key(1))
+        let k = MLXRandom.normal([b, h, n, dh], key: MLXRandom.key(2))
+        let v = MLXRandom.normal([b, h, n, dh], key: MLXRandom.key(3))
+        eval([q, k, v])
+
+        let out = slidingWindowSDPA(q: q, k: k, v: v, windowSize: windowSize, dh: dh)
+        eval(out)
+
+        let hasNaN = any(isNaN(out)).item(Bool.self)
+        XCTAssertFalse(hasNaN)
+    }
+}
+
+// MARK: - Linear SDPA Tests
+
+final class LinearSDPATests: XCTestCase {
+    func testLinearSDPAShape() {
+        let b = 2
+        let h = 4
+        let n = 16
+        let dh = 32
+
+        let q = MLXRandom.normal([b, h, n, dh], key: MLXRandom.key(1))
+        let k = MLXRandom.normal([b, h, n, dh], key: MLXRandom.key(2))
+        let v = MLXRandom.normal([b, h, n, dh], key: MLXRandom.key(3))
+        eval([q, k, v])
+
+        let out = linearSDPA(q: q, k: k, v: v, dh: dh, eps: 1e-6)
+        eval(out)
+
+        XCTAssertEqual(out.shape, [b, h, n, dh])
+    }
+
+    func testCausalLinearSDPAShape() {
+        let b = 2
+        let h = 4
+        let n = 16
+        let dh = 32
+
+        let q = MLXRandom.normal([b, h, n, dh], key: MLXRandom.key(1))
+        let k = MLXRandom.normal([b, h, n, dh], key: MLXRandom.key(2))
+        let v = MLXRandom.normal([b, h, n, dh], key: MLXRandom.key(3))
+        eval([q, k, v])
+
+        let out = causalLinearSDPA(q: q, k: k, v: v, dh: dh, eps: 1e-6)
+        eval(out)
+
+        XCTAssertEqual(out.shape, [b, h, n, dh])
+    }
+}
