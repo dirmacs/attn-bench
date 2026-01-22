@@ -1,0 +1,66 @@
+name,b,n,dModel,heads,kvHeads,iters,msPerIter
+MHA,1,128,512,8,8,20,1.0431
+GQA(kv=4),1,128,512,8,4,20,0.8698
+MQA(kv=1),1,128,512,8,1,20,1.1231
+SWA(w=32),1,128,512,8,8,20,6.9135
+MaskedSWA(w=32),1,128,512,8,8,20,1.1893
+SWA(w=64),1,128,512,8,8,20,7.0813
+MaskedSWA(w=64),1,128,512,8,8,20,1.2402
+SWA(w=128),1,128,512,8,8,20,6.9502
+MaskedSWA(w=128),1,128,512,8,8,20,1.2015
+BlockSparse(bs=32),1,128,512,8,8,20,1.3074
+BlockSparse(bs=64),1,128,512,8,8,20,1.4252
+LinearAttn,1,128,512,8,8,20,1.6164
+CausalLinearAttn,1,128,512,8,8,20,2.6423
+MHA,1,256,512,8,8,20,1.4175
+GQA(kv=4),1,256,512,8,4,20,1.3727
+MQA(kv=1),1,256,512,8,1,20,1.3729
+SWA(w=32),1,256,512,8,8,20,12.3892
+MaskedSWA(w=32),1,256,512,8,8,20,1.7280
+SWA(w=64),1,256,512,8,8,20,12.3508
+MaskedSWA(w=64),1,256,512,8,8,20,1.6914
+SWA(w=128),1,256,512,8,8,20,12.2415
+MaskedSWA(w=128),1,256,512,8,8,20,1.3369
+BlockSparse(bs=32),1,256,512,8,8,20,1.6279
+BlockSparse(bs=64),1,256,512,8,8,20,1.8016
+LinearAttn,1,256,512,8,8,20,1.8168
+CausalLinearAttn,1,256,512,8,8,20,3.1781
+MHA,1,512,512,8,8,20,1.7244
+GQA(kv=4),1,512,512,8,4,20,1.5934
+MQA(kv=1),1,512,512,8,1,20,1.5886
+MaskedSWA(w=32),1,512,512,8,8,20,1.8353
+MaskedSWA(w=64),1,512,512,8,8,20,1.8393
+MaskedSWA(w=128),1,512,512,8,8,20,1.9683
+BlockSparse(bs=32),1,512,512,8,8,20,1.7063
+BlockSparse(bs=64),1,512,512,8,8,20,1.8081
+LinearAttn,1,512,512,8,8,20,2.0065
+CausalLinearAttn,1,512,512,8,8,20,5.9376
+MHA,1,1024,512,8,8,20,4.3810
+GQA(kv=4),1,1024,512,8,4,20,4.1953
+MQA(kv=1),1,1024,512,8,1,20,3.9661
+MaskedSWA(w=32),1,1024,512,8,8,20,5.1297
+MaskedSWA(w=64),1,1024,512,8,8,20,5.1025
+MaskedSWA(w=128),1,1024,512,8,8,20,5.3692
+BlockSparse(bs=32),1,1024,512,8,8,20,2.3064
+BlockSparse(bs=64),1,1024,512,8,8,20,2.4607
+LinearAttn,1,1024,512,8,8,20,2.7509
+
+// ===== BENCHMARK SUMMARY =====
+// Config: b=1, dModel=512, heads=8
+//
+// Dense Attention (O(N²)):
+//   - MHA: Standard multi-head attention
+//   - GQA: Grouped-query attention (fewer KV heads)
+//   - MQA: Multi-query attention (single KV head)
+//
+// Sparse/Efficient Attention:
+//   - SWA: Sliding Window O(N·W) - true gather (small N only)
+//   - MaskedSWA: Dense+mask sliding window O(N²)
+//   - BlockSparse: Block-local + global tokens
+//   - LinearAttn: O(N·D²) via kernel trick
+//   - CausalLinearAttn: O(N·D²) causal via cumsum
+//
+// Key findings:
+//   1. SWA vs MaskedSWA: gather overhead vs dense compute
+//   2. BlockSparse: efficient block-wise attention
+//   3. LinearAttn: trades N² for D² complexity
