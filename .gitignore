@@ -1,17 +1,27 @@
 # macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
 
 # Swift Package Manager
 /.build
 /Packages
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+.swiftpm/xcode/
 
 # Xcode
 xcuserdata/
 DerivedData/
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
 
 # CMake
 /build/
@@ -19,6 +29,12 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 Makefile
+*.cmake
+!CMakeLists.txt
+
+# Metal
+*.metallib
+*.air
 
 # Credentials
 .netrc
@@ -29,3 +45,49 @@ Makefile
 *~
 .idea/
 .vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+.env
+*.egg-info/
+dist/
+eggs/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Analysis outputs (keep in figures/, regenerate from data)
+# Uncomment if you want to exclude generated figures:
+# figures/*.png
+# figures/*.pdf
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.bak
+*.orig
+
+# Benchmark intermediate files
+*.csv.bak
+
+# Typst auxiliary files
+*.typ.bak
+
+# Old/duplicate paper files
+attnbench-paper.typ
+attnbench-paper.pdf
