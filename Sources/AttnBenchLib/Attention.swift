@@ -315,9 +315,15 @@ public func slidingWindowSDPA(q: MLXArray, k: MLXArray, v: MLXArray, windowSize:
 
     // Pad K and V on the sequence dimension for boundary handling
     // Pad shape: [B, H, N + windowSize - 1, Dh]
-    let padWidth = [[0, 0], [0, 0], [halfWindow, windowSize - halfWindow - 1], [0, 0]]
-    let kPadded = padded(k, widths: padWidth, mode: .constant, value: MLXArray(Float(-1e9)))
-    let vPadded = padded(v, widths: padWidth, mode: .constant, value: MLXArray(Float(0)))
+    // IntOrPair can be initialized from tuples (low, high) or integer literals
+    let padWidths: [IntOrPair] = [
+        .init((0, 0)),                                      // Batch dim
+        .init((0, 0)),                                      // Head dim
+        .init((halfWindow, windowSize - halfWindow - 1)),   // Sequence dim
+        .init((0, 0))                                       // Feature dim
+    ]
+    let kPadded = padded(k, widths: padWidths, mode: .constant, value: MLXArray(Float(-1e9)))
+    let vPadded = padded(v, widths: padWidths, mode: .constant, value: MLXArray(Float(0)))
 
     // Build windowed views by gathering slices for each position
     // For position i, we want k[i:i+windowSize] and v[i:i+windowSize]
@@ -354,6 +360,93 @@ public func slidingWindowSDPA(q: MLXArray, k: MLXArray, v: MLXArray, windowSize:
 
     // Remove the extra dimension: [B, H, N, Dh]
     return attended.squeezed(axis: 3)
+}
+
+// MARK: - Masked Sliding Window Attention (Dense + Mask)
+
+/// Masked Sliding Window Attention using dense computation with a band mask.
+///
+/// This is the "fake" sliding window that most frameworks use - it computes the full
+/// N×N attention matrix but masks out values outside the window. Still O(N²) compute
+/// but leverages the fast dense matmul on Apple Silicon AMX units.
+///
+/// Comparing this to true SWA shows whether gather overhead exceeds the computational savings.
+public struct MaskedSlidingWindowAttention: AttentionBlock {
+    public let name: String
+    public let b: Int
+    public let n: Int
+    public let dModel: Int
+    public let heads: Int
+    public let windowSize: Int
+    public let dh: Int
+    public let wq: Linear
+    public let wk: Linear
+    public let wv: Linear
+    public let wo: Linear
+    public let mask: MLXArray  // Precomputed band mask
+
+    public init(b: Int, n: Int, dModel: Int, heads: Int, windowSize: Int, seed: UInt64) {
+        precondition(dModel % heads == 0, "dModel must be divisible by heads")
+        precondition(windowSize > 0, "windowSize must be positive")
+        self.name = "MaskedSWA(w=\(windowSize))"
+        self.b = b
+        self.n = n
+        self.dModel = dModel
+        self.heads = heads
+        self.windowSize = min(windowSize, n)
+        self.dh = dModel / heads
+        self.wq = Linear(dModel, dModel, seed: seed &+ 1)
+        self.wk = Linear(dModel, dModel, seed: seed &+ 2)
+        self.wv = Linear(dModel, dModel, seed: seed &+ 3)
+        self.wo = Linear(dModel, dModel, seed: seed &+ 4)
+
+        // Precompute band mask: 1 for positions within window, 0 outside
+        // Shape: [N, N] - will be broadcast to [B, H, N, N]
+        let halfWindow = windowSize / 2
+        // Create upper and lower triangular masks to form a band
+        let upperMask = triu(MLXArray.ones([n, n], dtype: .float32), k: -halfWindow)
+        let lowerMask = tril(MLXArray.ones([n, n], dtype: .float32), k: halfWindow)
+        self.mask = upperMask * lowerMask  // Intersection gives the band
+        forceEval([mask])
+    }
+
+    public func forward(x: MLXArray) -> MLXArray {
+        // x: [B, N, D]
+        var q = wq(x)
+        var k = wk(x)
+        var v = wv(x)
+
+        // Reshape to [B, H, N, Dh]
+        q = q.reshaped([b, n, heads, dh]).transposed(axes: [0, 2, 1, 3])
+        k = k.reshaped([b, n, heads, dh]).transposed(axes: [0, 2, 1, 3])
+        v = v.reshaped([b, n, heads, dh]).transposed(axes: [0, 2, 1, 3])
+
+        let out = maskedSlidingWindowSDPA(q: q, k: k, v: v, mask: mask, dh: dh)
+
+        // [B, H, N, Dh] -> [B, N, H*Dh] -> [B, N, D]
+        let merged = out.transposed(axes: [0, 2, 1, 3]).reshaped([b, n, dModel])
+        return wo(merged)
+    }
+}
+
+/// Masked sliding window SDPA - dense computation with band mask.
+///
+/// This computes the full N×N attention matrix but applies a band mask.
+/// Still O(N²) but uses fast dense ops.
+public func maskedSlidingWindowSDPA(q: MLXArray, k: MLXArray, v: MLXArray, mask: MLXArray, dh: Int) -> MLXArray {
+    let scale = Float(1.0 / sqrt(Double(dh)))
+
+    // Standard attention with mask
+    let kt = k.transposed(axes: [0, 1, 3, 2])  // [B, H, Dh, N]
+    var scores = matmul(q, kt) * scale  // [B, H, N, N]
+
+    // Apply mask: set masked positions to -inf before softmax
+    let maskBroadcast = mask.reshaped([1, 1, mask.dim(0), mask.dim(1)])
+    let negInf = MLXArray(Float(-1e9))
+    scores = MLX.where(maskBroadcast .> 0, scores, negInf)
+
+    let probs = softmax(scores, axis: -1)
+    return matmul(probs, v)
 }
 
 // MARK: - Block-Sparse Attention
@@ -729,4 +822,252 @@ public func bench(block: AttentionBlock, b: Int, n: Int, dModel: Int, iters: Int
     let t1 = nowSeconds()
 
     return (t1 - t0) * 1000.0 / Double(iters)
+}
+
+// MARK: - Extended Benchmark Result with Per-Iteration Timing
+
+/// Extended benchmark result with full statistical data
+public struct BenchResult {
+    public let name: String
+    public let b: Int
+    public let n: Int
+    public let dModel: Int
+    public let heads: Int
+    public let kvHeads: Int
+    public let runId: Int
+    public let iterTimings: [Double]  // Individual iteration times in ms
+
+    public var mean: Double {
+        iterTimings.reduce(0, +) / Double(iterTimings.count)
+    }
+
+    public var std: Double {
+        guard iterTimings.count > 1 else { return 0.0 }
+        let m = mean
+        let variance = iterTimings.map { ($0 - m) * ($0 - m) }.reduce(0, +) / Double(iterTimings.count - 1)
+        return sqrt(variance)
+    }
+
+    public var min: Double {
+        iterTimings.min() ?? 0.0
+    }
+
+    public var max: Double {
+        iterTimings.max() ?? 0.0
+    }
+
+    public var median: Double {
+        let sorted = iterTimings.sorted()
+        let count = sorted.count
+        if count % 2 == 0 {
+            return (sorted[count/2 - 1] + sorted[count/2]) / 2.0
+        } else {
+            return sorted[count/2]
+        }
+    }
+
+    /// 95% Confidence Interval half-width (uses t-distribution)
+    public var ci95: Double {
+        guard iterTimings.count > 1 else { return 0.0 }
+        // t-value for 95% CI with n-1 degrees of freedom (approximate for common sizes)
+        let n = Double(iterTimings.count)
+        let tCrit: Double
+        switch iterTimings.count {
+        case 2: tCrit = 12.706
+        case 3: tCrit = 4.303
+        case 4: tCrit = 3.182
+        case 5: tCrit = 2.776
+        case 6: tCrit = 2.571
+        case 7: tCrit = 2.447
+        case 8: tCrit = 2.365
+        case 9: tCrit = 2.306
+        case 10: tCrit = 2.262
+        case 11...20: tCrit = 2.093
+        case 21...30: tCrit = 2.045
+        default: tCrit = 1.96  // Large sample approximation
+        }
+        return tCrit * std / sqrt(n)
+    }
+
+    public init(name: String, b: Int, n: Int, dModel: Int, heads: Int, kvHeads: Int, runId: Int, iterTimings: [Double]) {
+        self.name = name
+        self.b = b
+        self.n = n
+        self.dModel = dModel
+        self.heads = heads
+        self.kvHeads = kvHeads
+        self.runId = runId
+        self.iterTimings = iterTimings
+    }
+}
+
+/// Extended benchmark function that returns per-iteration timing data
+public func benchExtended(
+    block: AttentionBlock,
+    b: Int,
+    n: Int,
+    dModel: Int,
+    iters: Int,
+    warmup: Int,
+    seed: UInt64
+) -> [Double] {
+    let key = MLXRandom.key(seed)
+    let x = MLXRandom.normal([b, n, dModel], key: key)
+    forceEval([x])
+
+    // Warmup
+    for _ in 0..<warmup {
+        let y = block.forward(x: x)
+        forceEval([y])
+    }
+
+    // Timed iterations with individual measurements
+    var timings: [Double] = []
+    timings.reserveCapacity(iters)
+
+    for _ in 0..<iters {
+        let t0 = nowSeconds()
+        let y = block.forward(x: x)
+        forceEval([y])
+        let t1 = nowSeconds()
+        timings.append((t1 - t0) * 1000.0)
+    }
+
+    return timings
+}
+
+/// Run multiple independent benchmark runs for statistical significance
+public func benchMultipleRuns(
+    block: AttentionBlock,
+    name: String,
+    b: Int,
+    n: Int,
+    dModel: Int,
+    heads: Int,
+    kvHeads: Int,
+    runs: Int,
+    itersPerRun: Int,
+    warmup: Int,
+    baseSeed: UInt64
+) -> [BenchResult] {
+    var results: [BenchResult] = []
+
+    for runId in 0..<runs {
+        // Use different seed for each run for independence
+        let seed = baseSeed + UInt64(runId * 1000)
+        let timings = benchExtended(
+            block: block,
+            b: b,
+            n: n,
+            dModel: dModel,
+            iters: itersPerRun,
+            warmup: warmup,
+            seed: seed
+        )
+
+        results.append(BenchResult(
+            name: name,
+            b: b,
+            n: n,
+            dModel: dModel,
+            heads: heads,
+            kvHeads: kvHeads,
+            runId: runId,
+            iterTimings: timings
+        ))
+    }
+
+    return results
+}
+
+/// Aggregate results from multiple runs into combined statistics
+public struct AggregatedStats {
+    public let name: String
+    public let n: Int
+    public let allTimings: [Double]  // All individual timings across all runs
+    public let runMeans: [Double]    // Mean of each run
+    public let numRuns: Int
+    public let numItersPerRun: Int
+
+    public var grandMean: Double {
+        allTimings.reduce(0, +) / Double(allTimings.count)
+    }
+
+    public var grandStd: Double {
+        guard allTimings.count > 1 else { return 0.0 }
+        let m = grandMean
+        let variance = allTimings.map { ($0 - m) * ($0 - m) }.reduce(0, +) / Double(allTimings.count - 1)
+        return sqrt(variance)
+    }
+
+    /// Standard error of the mean across runs
+    public var runSEM: Double {
+        guard runMeans.count > 1 else { return 0.0 }
+        let m = runMeans.reduce(0, +) / Double(runMeans.count)
+        let variance = runMeans.map { ($0 - m) * ($0 - m) }.reduce(0, +) / Double(runMeans.count - 1)
+        return sqrt(variance) / sqrt(Double(runMeans.count))
+    }
+
+    /// 95% CI based on between-run variability
+    public var ci95: Double {
+        guard runMeans.count > 1 else { return 0.0 }
+        let tCrit: Double
+        switch runMeans.count {
+        case 2: tCrit = 12.706
+        case 3: tCrit = 4.303
+        case 4: tCrit = 3.182
+        case 5: tCrit = 2.776
+        case 6...10: tCrit = 2.262
+        default: tCrit = 1.96
+        }
+        return tCrit * runSEM
+    }
+
+    public init(results: [BenchResult]) {
+        guard !results.isEmpty else {
+            fatalError("Cannot aggregate empty results")
+        }
+
+        self.name = results[0].name
+        self.n = results[0].n
+        self.numRuns = results.count
+        self.numItersPerRun = results[0].iterTimings.count
+        self.allTimings = results.flatMap { $0.iterTimings }
+        self.runMeans = results.map { $0.mean }
+    }
+}
+
+// MARK: - CSV Export Functions
+
+/// Print extended CSV header for per-iteration data
+public func printExtendedCSVHeader() {
+    print("name,b,n,dModel,heads,kvHeads,runId,iter,ms")
+}
+
+/// Print all per-iteration timings in CSV format
+public func printExtendedCSV(_ results: [BenchResult]) {
+    for result in results {
+        for (iterIdx, ms) in result.iterTimings.enumerated() {
+            print("\(result.name),\(result.b),\(result.n),\(result.dModel),\(result.heads),\(result.kvHeads),\(result.runId),\(iterIdx),\(String(format: "%.4f", ms))")
+        }
+    }
+}
+
+/// Print aggregated statistics CSV header
+public func printAggregatedCSVHeader() {
+    print("name,b,n,dModel,heads,kvHeads,numRuns,itersPerRun,mean,std,ci95_lower,ci95_upper,min,max,median")
+}
+
+/// Print aggregated statistics in CSV format
+public func printAggregatedCSV(_ stats: AggregatedStats, b: Int, dModel: Int, heads: Int, kvHeads: Int) {
+    let ciLower = stats.grandMean - stats.ci95
+    let ciUpper = stats.grandMean + stats.ci95
+    let minVal = stats.allTimings.min() ?? 0.0
+    let maxVal = stats.allTimings.max() ?? 0.0
+    let sorted = stats.allTimings.sorted()
+    let median = sorted.count % 2 == 0
+        ? (sorted[sorted.count/2 - 1] + sorted[sorted.count/2]) / 2.0
+        : sorted[sorted.count/2]
+
+    print("\(stats.name),\(b),\(stats.n),\(dModel),\(heads),\(kvHeads),\(stats.numRuns),\(stats.numItersPerRun),\(String(format: "%.4f", stats.grandMean)),\(String(format: "%.4f", stats.grandStd)),\(String(format: "%.4f", ciLower)),\(String(format: "%.4f", ciUpper)),\(String(format: "%.4f", minVal)),\(String(format: "%.4f", maxVal)),\(String(format: "%.4f", median))")
 }
