@@ -358,7 +358,7 @@ Our analysis generates seven publication-quality figures that provide complement
   inset: 12pt,
   radius: 4pt,
 )[
-  *Figure Reference*: `figures/fig1_latency_scaling.pdf`
+  *Figure Reference*: `../figures/fig1_latency_scaling.pdf`
 
   This figure shows latency (ms) vs. sequence length (N) for all mechanisms on a log-scale x-axis. Key observations:
 
@@ -377,7 +377,7 @@ Our analysis generates seven publication-quality figures that provide complement
   inset: 12pt,
   radius: 4pt,
 )[
-  *Figure Reference*: `figures/fig2_gather_vs_masked.pdf`
+  *Figure Reference*: `../figures/fig2_gather_vs_masked.pdf`
 
   Panel (a) shows absolute latency comparison between gather-based SWA and masked SWA.
   Panel (b) shows the overhead ratio (gather/masked).
@@ -392,7 +392,7 @@ Our analysis generates seven publication-quality figures that provide complement
   inset: 12pt,
   radius: 4pt,
 )[
-  *Figure Reference*: `figures/fig3_blocksparse_speedup.pdf`
+  *Figure Reference*: `../figures/fig3_blocksparse_speedup.pdf`
 
   This figure plots speedup vs. MHA (ratio > 1 = faster) with confidence intervals:
 
@@ -411,7 +411,7 @@ Our analysis generates seven publication-quality figures that provide complement
   inset: 12pt,
   radius: 4pt,
 )[
-  *Figure Reference*: `figures/fig4_linear_attention.pdf`
+  *Figure Reference*: `../figures/fig4_linear_attention.pdf`
 
   Panel (a) compares MHA, LinearAttn, and CausalLinearAttn latencies.
   Panel (b) overlays observed data points on theoretical O(N) and O(N²) curves.
@@ -429,7 +429,7 @@ Our analysis generates seven publication-quality figures that provide complement
   inset: 12pt,
   radius: 4pt,
 )[
-  *Figure Reference*: `figures/fig5_heatmap.pdf`
+  *Figure Reference*: `../figures/fig5_heatmap.pdf`
 
   A heatmap showing speedup relative to MHA for all mechanisms and sequence lengths:
   - *Green cells* (speedup > 1): Faster than MHA
@@ -449,7 +449,7 @@ Our analysis generates seven publication-quality figures that provide complement
   inset: 12pt,
   radius: 4pt,
 )[
-  *Figure Reference*: `figures/fig6_dense_variants.pdf`
+  *Figure Reference*: `../figures/fig6_dense_variants.pdf`
 
   Panel (a) compares MHA, GQA, and MQA latencies.
   Panel (b) shows KV cache memory requirements (KB).
@@ -467,7 +467,7 @@ Our analysis generates seven publication-quality figures that provide complement
   inset: 12pt,
   radius: 4pt,
 )[
-  *Figure Reference*: `figures/fig7_scaling_analysis.pdf`
+  *Figure Reference*: `../figures/fig7_scaling_analysis.pdf`
 
   Log-log plot with fitted power-law slopes:
   - *MHA*: slope = 1.73 (expected: 2.0 for O(N²))
@@ -1122,7 +1122,7 @@ cmake --build build
 # Generate figures
 python analysis/analyze_benchmarks.py \
   --input results.csv \
-  --output figures/
+  --output ../figures/
 ```
 
 #pagebreak()
@@ -1202,4 +1202,5 @@ let numerator = matmul(phiQ, kv)
 
 #pagebreak()
 
+// Note: references.bib is in the same directory as paper.typ
 #bibliography("references.bib", title: "References", style: "ieee")

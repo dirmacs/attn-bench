@@ -191,21 +191,21 @@ cmake --build build
 ### 3. Run Benchmarks
 
 ```bash
-./build/AttnBench > benchmark_results.csv
+./build/AttnBench > data/benchmark_results.csv
 ```
 
 ### 4. Generate Figures
 
 ```bash
 python analysis/analyze_benchmarks.py \
-  --input benchmark_results.csv \
+  --input data/benchmark_results.csv \
   --output figures/
 ```
 
 ### 5. Compile Paper (Optional)
 
 ```bash
-typst compile paper.typ paper.pdf
+typst compile paper/paper.typ paper/paper.pdf
 ```
 
 ---
@@ -224,6 +224,12 @@ attn-bench/
 ├── analysis/
 │   ├── analyze_benchmarks.py    # Statistical analysis + figures
 │   └── requirements.txt         # Python dependencies
+├── data/
+│   └── benchmark_results.csv    # Raw benchmark output
+├── docs/
+│   ├── BLOG_POST.md             # Technical blog post
+│   ├── CONTRIBUTING.md          # Contribution guidelines
+│   └── LINKEDIN_POST.md         # Social media content
 ├── figures/                     # Generated visualizations
 │   ├── fig1_latency_scaling.pdf
 │   ├── fig2_gather_vs_masked.pdf
@@ -233,10 +239,10 @@ attn-bench/
 │   ├── fig6_dense_variants.pdf
 │   ├── fig7_scaling_analysis.pdf
 │   └── statistical_summary.txt
-├── paper.typ                    # Research paper (Typst)
-├── paper.pdf                    # Compiled paper
-├── references.bib               # Bibliography
-├── BLOG_POST.md                 # Technical blog post
+├── paper/
+│   ├── paper.typ                # Research paper (Typst)
+│   ├── paper.pdf                # Compiled paper
+│   └── references.bib           # Bibliography
 ├── CMakeLists.txt               # CMake build
 ├── Package.swift                # Swift Package Manager
 └── LICENSE                      # MIT License
