@@ -390,6 +390,61 @@ final class SlidingWindowSDPATests: XCTestCase {
 
 // MARK: - Linear SDPA Tests
 
+// MARK: - Masked Sliding Window Attention Tests
+
+final class MaskedSlidingWindowAttentionTests: XCTestCase {
+    func testMaskedSWAShape() {
+        let b = 2
+        let n = 32
+        let dModel = 64
+        let heads = 4
+        let windowSize = 8
+
+        let maskedSwa = MaskedSlidingWindowAttention(b: b, n: n, dModel: dModel, heads: heads, windowSize: windowSize, seed: 42)
+        let x = MLXRandom.normal([b, n, dModel], key: MLXRandom.key(1))
+        eval(x)
+
+        let y = maskedSwa.forward(x: x)
+        eval(y)
+
+        XCTAssertEqual(y.shape, [b, n, dModel])
+    }
+
+    func testMaskedSWAName() {
+        let maskedSwa = MaskedSlidingWindowAttention(b: 1, n: 16, dModel: 32, heads: 4, windowSize: 4, seed: 42)
+        XCTAssertEqual(maskedSwa.name, "MaskedSWA(w=4)")
+    }
+
+    func testMaskedSWAFinite() {
+        let b = 1
+        let n = 16
+        let dModel = 32
+        let heads = 2
+        let windowSize = 4
+
+        let maskedSwa = MaskedSlidingWindowAttention(b: b, n: n, dModel: dModel, heads: heads, windowSize: windowSize, seed: 42)
+        let x = MLXRandom.normal([b, n, dModel], key: MLXRandom.key(1))
+        eval(x)
+
+        let y = maskedSwa.forward(x: x)
+        eval(y)
+
+        let hasNaN = any(isNaN(y)).item(Bool.self)
+        XCTAssertFalse(hasNaN)
+    }
+
+    func testMaskedSWAMaskShape() {
+        let b = 1
+        let n = 16
+        let dModel = 32
+        let heads = 2
+        let windowSize = 4
+
+        let maskedSwa = MaskedSlidingWindowAttention(b: b, n: n, dModel: dModel, heads: heads, windowSize: windowSize, seed: 42)
+        XCTAssertEqual(maskedSwa.mask.shape, [n, n])
+    }
+}
+
 final class LinearSDPATests: XCTestCase {
     func testLinearSDPAShape() {
         let b = 2
